@@ -34,7 +34,7 @@ const RENDER_CONFIG = {
   CUBE_HEIGHT_STANDING: 60,    // 立っている時の高さ
   CUBE_HEIGHT_LYING: 30,       // �ている時の高さ
   ORIGIN_X: 400,        // 原点X座標（画面中央）
-  ORIGIN_Y: 100,        // 原点Y座標（上からの余白）
+  ORIGIN_Y: 280,        // 原点Y座標（画面中央付近）
 };
 
 // カラーパレット（白・黒・グレー基調）

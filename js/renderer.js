@@ -249,11 +249,8 @@ class Renderer {
    * @param {string} mode - モード
    */
   drawUI(score, mode) {
-    const ctx = this.ctx;
-
-    // 背景を塗りつぶし
-    ctx.fillStyle = COLORS.BACKGROUND;
-    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    // UI情報の描画は必要に応じて追加
+    // 背景はCSSで設定済みのため、ここでは塗りつぶさない
   }
 
   /**
