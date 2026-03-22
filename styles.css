@@ -1,0 +1,251 @@
+/* ===== グローバルスタイル ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Arial', 'Helvetica', sans-serif;
+  background: #1a1a1a;
+  color: #e0e0e0;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* ===== ゲームコンテナ ===== */
+.game-container {
+  position: relative;
+  width: 800px;
+  max-width: 100%;
+}
+
+/* ===== ヘッダー ===== */
+.game-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  background: #2a2a2a;
+  border-radius: 8px 8px 0 0;
+  border-bottom: 2px solid #3a3a3a;
+}
+
+.score-display,
+.mode-display {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.label {
+  color: #888;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+#score,
+#mode {
+  font-size: 24px;
+  font-weight: bold;
+  color: #f0f0f0;
+}
+
+/* ===== Canvas ===== */
+#gameCanvas {
+  display: block;
+  background: #0a0a0a;
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+/* ===== ブラインドモードログ ===== */
+.blind-mode-log {
+  background: #1a1a1a;
+  border-radius: 8px;
+  padding: 30px;
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+#blindModeContent {
+  font-size: 24px;
+  line-height: 2;
+  text-align: center;
+}
+
+#blindModeContent p {
+  margin: 15px 0;
+}
+
+#blindModeContent strong {
+  color: #f0f0f0;
+  font-size: 28px;
+}
+
+/* ===== メニュー ===== */
+.menu {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(30, 30, 30, 0.98);
+  border: 2px solid #4a4a4a;
+  border-radius: 12px;
+  padding: 30px;
+  min-width: 350px;
+  z-index: 100;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+}
+
+.menu-title {
+  font-size: 32px;
+  text-align: center;
+  margin-bottom: 25px;
+  color: #f0f0f0;
+}
+
+.menu-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 25px;
+}
+
+.menu-button {
+  background: #3a3a3a;
+  color: #e0e0e0;
+  border: 1px solid #5a5a5a;
+  border-radius: 6px;
+  padding: 12px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.menu-button:hover {
+  background: #4a4a4a;
+  border-color: #7a7a7a;
+  transform: translateY(-1px);
+}
+
+.menu-button:active {
+  transform: translateY(0);
+}
+
+.menu-hint {
+  border-top: 1px solid #4a4a4a;
+  padding-top: 20px;
+  text-align: center;
+  font-size: 14px;
+  color: #888;
+  line-height: 1.8;
+}
+
+.menu-hint p {
+  margin: 5px 0;
+}
+
+.menu-hint strong {
+  color: #b0b0b0;
+}
+
+/* ===== オーバーレイ（スタート画面）===== */
+.overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(10, 10, 10, 0.95);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 50;
+  padding: 40px;
+}
+
+.game-title {
+  font-size: 64px;
+  font-weight: bold;
+  color: #f0f0f0;
+  margin-bottom: 15px;
+  letter-spacing: 4px;
+}
+
+.game-subtitle {
+  font-size: 18px;
+  color: #888;
+  margin-bottom: 40px;
+}
+
+.start-button {
+  background: #3a3a3a;
+  color: #f0f0f0;
+  border: 2px solid #5a5a5a;
+  border-radius: 8px;
+  padding: 15px 50px;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-bottom: 40px;
+}
+
+.start-button:hover {
+  background: #4a4a4a;
+  border-color: #7a7a7a;
+  transform: scale(1.05);
+}
+
+.instructions {
+  text-align: center;
+  color: #888;
+  font-size: 16px;
+  line-height: 1.8;
+}
+
+.instructions p {
+  margin-bottom: 10px;
+}
+
+.instructions strong {
+  color: #b0b0b0;
+}
+
+.instructions ul {
+  list-style: none;
+  padding: 0;
+}
+
+.instructions li {
+  margin: 8px 0;
+}
+
+/* ===== レスポンシブ ===== */
+@media (max-width: 850px) {
+  .game-container {
+    width: 100%;
+    padding: 10px;
+  }
+
+  #gameCanvas {
+    width: 100%;
+    height: auto;
+  }
+
+  .game-title {
+    font-size: 48px;
+  }
+
+  .menu {
+    min-width: 90%;
+  }
+}

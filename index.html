@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>キューブフィット - CubeFit</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="game-container">
+    <!-- ヘッダー：スコアとモード表示 -->
+    <header class="game-header">
+      <div class="score-display">
+        <span class="label">Score:</span>
+        <span id="score">0</span>
+      </div>
+      <div class="mode-display">
+        <span class="label">Mode:</span>
+        <span id="mode">Normal</span>
+      </div>
+    </header>
+
+    <!-- メインCanvas -->
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+    <!-- ブラインドモード用ログ -->
+    <div id="blindModeLog" class="blind-mode-log" style="display: none;">
+      <div id="blindModeContent"></div>
+    </div>
+
+    <!-- メニュー画面 -->
+    <div id="menu" class="menu" style="display: none;">
+      <h2 class="menu-title">Menu</h2>
+      <div class="menu-buttons">
+        <button id="btnResume" class="menu-button">Resume</button>
+        <button id="btnToggleMode" class="menu-button">Toggle Mode</button>
+        <button id="btnResetScore" class="menu-button">Reset Score</button>
+      </div>
+      <div class="menu-hint">
+        <p>Press <strong>Esc</strong> to close menu</p>
+        <p>Press <strong>Arrow Keys</strong> to move</p>
+        <p>Press <strong>Space</strong> to confirm</p>
+      </div>
+    </div>
+
+    <!-- ゲーム開始前のオーバーレイ -->
+    <div id="startOverlay" class="overlay">
+      <h1 class="game-title">CubeFit</h1>
+      <p class="game-subtitle">1×1×2の直方体を穴にフィットさせよう</p>
+      <button id="btnStart" class="start-button">Start Game</button>
+      <div class="instructions">
+        <p><strong>操作方法:</strong></p>
+        <ul>
+          <li>矢印キー: 直方体を転がす</li>
+          <li>Space: 決定</li>
+          <li>Esc: メニュー</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- スクリプト読み込み -->
+  <script src="js/constants.js"></script>
+  <script src="js/board.js"></script>
+  <script src="js/cube.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/game.js"></script>
+  <script>
+    // ゲーム開始
+    window.addEventListener('DOMContentLoaded', () => {
+      const game = new Game();
+
+      // スタートボタン
+      document.getElementById('btnStart').addEventListener('click', () => {
+        document.getElementById('startOverlay').style.display = 'none';
+        game.start();
+      });
+
+      // メニューボタン
+      document.getElementById('btnResume').addEventListener('click', () => {
+        game.toggleMenu();
+      });
+
+      document.getElementById('btnToggleMode').addEventListener('click', () => {
+        game.toggleMode();
+      });
+
+      document.getElementById('btnResetScore').addEventListener('click', () => {
+        game.resetScore();
+      });
+    });
+  </script>
+</body>
+</html>
