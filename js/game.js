@@ -272,17 +272,14 @@ class Game {
     // ブラインドモードの場合はCanvasを描画しない
     if (this.mode === MODES.BLIND) return;
 
-    // 画面をクリア
-    this.renderer.clear();
+    // 背景を描画（最初に描画）
+    this.renderer.drawBackground();
 
     // 盤面を描画
     this.renderer.drawBoard(this.board);
 
     // 直方体を描画
     this.renderer.drawCube(this.cube);
-
-    // UIを描画
-    this.renderer.drawUI(this.score, this.mode);
   }
 
   /**

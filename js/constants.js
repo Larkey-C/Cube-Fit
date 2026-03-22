@@ -14,8 +14,15 @@ const DIRECTIONS = {
 // 直方体の向き（orientation）の定義
 const ORIENTATIONS = {
   STANDING: 'standing',              // 立っている状態（1マス占有）
-  LYING_HORIZONTAL: 'lying-horizontal',  // 横に寝ている状態（2マス水平占有）
-  LYING_VERTICAL: 'lying-vertical'   // 縦に寝ている状態（2マス垂直占有）
+  LYING: 'lying'                     // 寝ている状態（2マス占有、lyingDirectionで方向を決定）
+};
+
+// 直方体が寝ている方向（lyingDirection）の定義
+const LYING_DIRECTIONS = {
+  UP: 'up',        // 上方向に倒れている
+  DOWN: 'down',    // 下方向に倒れている
+  LEFT: 'left',    // 左方向に倒れている
+  RIGHT: 'right'   // 右方向に倒れている
 };
 
 // ゲームモードの定義
@@ -34,7 +41,7 @@ const RENDER_CONFIG = {
   CUBE_HEIGHT_STANDING: 60,    // 立っている時の高さ
   CUBE_HEIGHT_LYING: 30,       // �ている時の高さ
   ORIGIN_X: 400,        // 原点X座標（画面中央）
-  ORIGIN_Y: 100,        // 原点Y座標（上からの余白）
+  ORIGIN_Y: 250,        // 原点Y座標（画面中央付近）
 };
 
 // カラーパレット（白・黒・グレー基調）

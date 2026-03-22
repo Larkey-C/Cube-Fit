@@ -137,7 +137,7 @@ class Renderer {
     } else {
       // 寝ている状態（2マス分）
       const cells = cube.getOccupiedCells();
-      this.drawLyingCube(cells, orientation);
+      this.drawLyingCube(cells);
     }
   }
 
@@ -193,13 +193,12 @@ class Renderer {
   /**
    * 寝ている状態の直方体を描画
    * @param {Array} cells - 占有セルの配列
-   * @param {string} orientation - 向き
    */
-  drawLyingCube(cells, orientation) {
+  drawLyingCube(cells) {
     const ctx = this.ctx;
 
     // 2つのセルを描画
-    cells.forEach((cell, index) => {
+    cells.forEach((cell) => {
       const { x, y } = this.gridToIso(cell.x, cell.y);
       const halfWidth = this.tileWidth / 2;
       const halfHeight = this.tileHeight / 2;
@@ -244,11 +243,9 @@ class Renderer {
   }
 
   /**
-   * UI情報を描画
-   * @param {number} score - スコア
-   * @param {string} mode - モード
+   * 背景を描画
    */
-  drawUI(score, mode) {
+  drawBackground() {
     const ctx = this.ctx;
 
     // 背景を塗りつぶし
