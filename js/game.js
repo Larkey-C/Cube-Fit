@@ -118,9 +118,9 @@ class Game {
     const newState = this.cube.tryRoll(direction);
     const newCells = newState.cells;
 
-    // 完全盤外チェック
-    if (this.board.isAllCellsOutOfBounds(newCells)) {
-      // エラーアニメーションを再生
+    // 有効な足場があるか判定（盤内の通常マスが少なくとも1つ）
+    if (!this.board.hasSolidSupport(newCells)) {
+      // 足場がない場合、エラーアニメーションを再生して移動キャンセル
       this.renderer.playErrorAnimation(this.cube, direction, this);
       return;
     }

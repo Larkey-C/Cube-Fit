@@ -81,4 +81,37 @@ class Board {
       y: Math.floor(index / this.size)
     };
   }
+
+  /**
+   * 指定された座標が穴かどうかを判定
+   * @param {number} x - X座標
+   * @param {number} y - Y座標
+   * @returns {boolean} 穴ならtrue
+   */
+  isHole(x, y) {
+    return this.holePosition.x === x && this.holePosition.y === y;
+  }
+
+  /**
+   * セルの配列に盤内の通常マス（穴ではない）が含まれるか判定
+   * 直方体が移動できるかどうかの判定に使用
+   * @param {Array} cells - セルの配列 [{x, y}, ...]
+   * @returns {boolean} 少なくとも1つのセルが盤内の通常マスならtrue
+   */
+  hasSolidSupport(cells) {
+    return cells.some(cell =>
+      this.isWithinBounds(cell.x, cell.y) && !this.isHole(cell.x, cell.y)
+    );
+  }
+
+  /**
+   * 全てのセルが穴または盤外であるか判定
+   * @param {Array} cells - セルの配列 [{x, y}, ...]
+   * @returns {boolean} 全てのセルが穴または盤外ならtrue
+   */
+  areAllCellsHolesOrOutOfBounds(cells) {
+    return cells.every(cell =>
+      !this.isWithinBounds(cell.x, cell.y) || this.isHole(cell.x, cell.y)
+    );
+  }
 }
