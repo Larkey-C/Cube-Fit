@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Cube Fit</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:#f0f0f0; font-family:'Helvetica Neue',Arial,sans-serif;
+    display:flex; flex-direction:column; align-items:center;
+    justify-content:center; min-height:100vh; color:#111;
+  }
+  #hud { display:flex; gap:40px; align-items:center; margin-bottom:16px;
+    font-size:14px; letter-spacing:0.08em; text-transform:uppercase; }
+  #hud span { color:#555; }
+  #hud strong { color:#111; font-size:22px; font-weight:700; }
+  #canvas-wrap { position:relative; }
+  canvas { display:block; }
+  #menu {
+    position:absolute; inset:0; background:rgba(240,240,240,0.96);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+  }
+  #menu h1 { font-size:28px; font-weight:800; letter-spacing:0.12em; margin-bottom:8px; }
+  #menu button {
+    width:220px; padding:12px 0; border:2px solid #111; background:transparent;
+    font-size:13px; letter-spacing:0.1em; text-transform:uppercase;
+    cursor:pointer; transition:background 0.15s,color 0.15s; font-family:inherit;
+  }
+  #menu button:hover { background:#111; color:#f0f0f0; }
+  #menu .sc { font-size:12px; color:#888; margin-top:8px; letter-spacing:0.08em; }
+  #blind-log {
+    display:none; width:420px; min-height:300px; background:#fff;
+    border:2px solid #111; padding:24px; font-size:14px; line-height:2;
+  }
+  #hint { font-size:11px; color:#999; margin-top:12px; letter-spacing:0.06em; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <div><span>SCORE&nbsp;</span><strong id="score-val">0</strong></div>
+  <div><span>MODE&nbsp;</span><strong id="mode-val">NORMAL</strong></div>
+</div>
+<div id="canvas-wrap">
+  <canvas id="game-canvas" width="520" height="460"></canvas>
+  <div id="blind-log"><div style="font-weight:700;font-size:16px;margin-bottom:12px">— BLIND MODE —</div><div id="bl-content"></div></div>
+  <div id="menu">
+    <h1>CUBE FIT</h1>
+    <button id="btn-start">START GAME</button>
+    <button id="btn-mode">MODE: NORMAL</button>
+    <button id="btn-reset">RESET SCORE</button>
+    <div class="sc">SCORE: <span id="score-val-menu">0</span> | BEST: <span id="best-val">0</span></div>
+  </div>
+</div>
+<div id="hint">ARROW KEYS: MOVE &nbsp;|&nbsp; ESC: MENU</div>
+
+<script>
+const TW = 84, TH = 48, WALL = 20;
+const OX = 260, OY = 110;
+const BS = 3;
+
+function iso(gx, gy) {
+  return { x: OX + (gx - gy) * TW/2, y: OY + (gx + gy) * TH/2 };
+}
+function proj(gx, gy, gz) {
+  return { sx: OX + (gx-gy)*TW/2, sy: OY + (gx+gy)*TH/2 - gz*WALL*2 };
+}
+
+function easeInOut(t) { return t<0.5?2*t*t:-1+(4-2*t)*t; }
+function easeIn(t)    { return t*t*t; }
+
+// =============================================
+// Board
+// =============================================
+class Board {
+  constructor() { this.hole = null; }
+  placeHole(excl) {
+    if (!excl) excl = [];
+    var all=[];
+    for(var y=0;y<BS;y++) for(var x=0;x<BS;x++)
+      if(!excl.some(function(c){return c.x===x&&c.y===y;})) all.push({x:x,y:y});
+    this.hole = all[Math.floor(Math.random()*all.length)];
+  }
+  inBounds(x,y){ return x>=0&&x<BS&&y>=0&&y<BS; }
+
+  drawTile(ctx, x, y) {
+    var s=iso(x,y), cx=s.x, cy=s.y;
+    ctx.beginPath();
+    ctx.moveTo(cx,cy); ctx.lineTo(cx+TW/2,cy+TH/2);
+    ctx.lineTo(cx,cy+TH); ctx.lineTo(cx-TW/2,cy+TH/2);
+    ctx.closePath();
+    ctx.fillStyle='#fff'; ctx.fill();
+    ctx.strokeStyle='#ccc'; ctx.lineWidth=1; ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx-TW/2,cy+TH/2); ctx.lineTo(cx,cy+TH);
+    ctx.lineTo(cx,cy+TH+WALL); ctx.lineTo(cx-TW/2,cy+TH/2+WALL);
+    ctx.closePath(); ctx.fillStyle='#ddd'; ctx.fill();
+    ctx.strokeStyle='#ccc'; ctx.lineWidth=1; ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx,cy+TH); ctx.lineTo(cx+TW/2,cy+TH/2);
+    ctx.lineTo(cx+TW/2,cy+TH/2+WALL); ctx.lineTo(cx,cy+TH+WALL);
+    ctx.closePath(); ctx.fillStyle='#e8e8e8'; ctx.fill();
+    ctx.strokeStyle='#ccc'; ctx.lineWidth=1; ctx.stroke();
+    var n=y*BS+x+1;
+    ctx.save(); ctx.font='bold 13px Helvetica Neue';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillStyle='#bbb'; ctx.fillText(String(n),cx,cy+TH/2);
+    ctx.restore();
+  }
+
+  drawFiltered(ctx, filterFn) {
+    for(var y=0;y<BS;y++) for(var x=0;x<BS;x++) {
+      if(this.hole&&this.hole.x===x&&this.hole.y===y) continue;
+      if(filterFn(x,y)) this.drawTile(ctx,x,y);
+    }
+  }
+}
+
+// =============================================
+// Cube
+// =============================================
+class Cube {
+  constructor() { this.reset(); }
+  reset() { this.x=0;this.y=0;this.orientation='standing';this.anim=null; }
+
+  getCells() {
+    if(this.orientation==='standing') return [{x:this.x,y:this.y}];
+    if(this.orientation==='lying_x')  return [{x:this.x,y:this.y},{x:this.x+1,y:this.y}];
+    return [{x:this.x,y:this.y},{x:this.x,y:this.y+1}];
+  }
+  getCellsFrom(nx,ny,ori) {
+    if(ori==='standing') return [{x:nx,y:ny}];
+    if(ori==='lying_x')  return [{x:nx,y:ny},{x:nx+1,y:ny}];
+    return [{x:nx,y:ny},{x:nx,y:ny+1}];
+  }
+  calcMove(dir) {
+    var nx=this.x,ny=this.y,nori=this.orientation;
+    if(this.orientation==='standing'){
+      if(dir==='right'){nx++;nori='lying_x';}
+      else if(dir==='left'){nx-=2;nori='lying_x';}
+      else if(dir==='down'){ny++;nori='lying_y';}
+      else if(dir==='up'){ny-=2;nori='lying_y';}
+    } else if(this.orientation==='lying_x'){
+      if(dir==='right'){nx+=2;nori='standing';}
+      else if(dir==='left'){nx--;nori='standing';}
+      else if(dir==='down'){ny++;nori='lying_x';}
+      else if(dir==='up'){ny--;nori='lying_x';}
+    } else {
+      if(dir==='right'){nx++;nori='lying_y';}
+      else if(dir==='left'){nx--;nori='lying_y';}
+      else if(dir==='down'){ny+=2;nori='standing';}
+      else if(dir==='up'){ny--;nori='standing';}
+    }
+    return {x:nx,y:ny,orientation:nori};
+  }
+  getDim(ori) {
+    if(ori==='standing') return {sx:1,sy:1,sz:2};
+    if(ori==='lying_x')  return {sx:2,sy:1,sz:1};
+    return {sx:1,sy:2,sz:1};
+  }
+
+  getVerts(wx,wy,wz,dim) {
+    var sx=dim.sx,sy=dim.sy,sz=dim.sz;
+    return [
+      {x:wx,    y:wy,    z:wz},
+      {x:wx+sx, y:wy,    z:wz},
+      {x:wx+sx, y:wy+sy, z:wz},
+      {x:wx,    y:wy+sy, z:wz},
+      {x:wx,    y:wy,    z:wz+sz},
+      {x:wx+sx, y:wy,    z:wz+sz},
+      {x:wx+sx, y:wy+sy, z:wz+sz},
+      {x:wx,    y:wy+sy, z:wz+sz},
+    ];
+  }
+
+  drawBox(ctx, verts, alpha) {
+    if(alpha===undefined) alpha=1;
+    var p=verts.map(function(v){return proj(v.x,v.y,v.z);});
+    ctx.save(); ctx.globalAlpha=alpha;
+    var faces=[
+      {idx:[3,2,6,7],fill:'#d8d8d8'},
+      {idx:[1,2,6,5],fill:'#c0c0c0'},
+      {idx:[4,5,6,7],fill:'#f0f0f0'},
+    ];
+    for(var i=0;i<faces.length;i++){
+      var f=faces[i], pts=f.idx.map(function(k){return p[k];});
+      ctx.beginPath();
+      ctx.moveTo(pts[0].sx,pts[0].sy);
+      for(var j=1;j<pts.length;j++) ctx.lineTo(pts[j].sx,pts[j].sy);
+      ctx.closePath();
+      ctx.fillStyle=f.fill; ctx.fill();
+      ctx.strokeStyle='#333'; ctx.lineWidth=1.8; ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  getRollVerts(t) {
+    var a=this.anim;
+    var dim=this.getDim(a.fromOri);
+    var angle=(Math.PI/2)*easeInOut(t);
+    var pvx=a.fromX, pvy=a.fromY;
+    if(a.dir==='right')     pvx=a.fromX+dim.sx;
+    else if(a.dir==='down') pvy=a.fromY+dim.sy;
+    var verts=this.getVerts(a.fromX,a.fromY,0,dim);
+    return verts.map(function(v){
+      var lx=v.x-pvx,ly=v.y-pvy,lz=v.z;
+      var rx=lx,ry=ly,rz=lz;
+      if(a.dir==='right'){
+        rx= lx*Math.cos(angle)+lz*Math.sin(angle);
+        rz=-lx*Math.sin(angle)+lz*Math.cos(angle);
+      } else if(a.dir==='left'){
+        rx= lx*Math.cos(-angle)+lz*Math.sin(-angle);
+        rz=-lx*Math.sin(-angle)+lz*Math.cos(-angle);
+      } else if(a.dir==='down'){
+        ry= ly*Math.cos(angle)+lz*Math.sin(angle);
+        rz=-ly*Math.sin(angle)+lz*Math.cos(angle);
+      } else {
+        ry= ly*Math.cos(-angle)+lz*Math.sin(-angle);
+        rz=-ly*Math.sin(-angle)+lz*Math.cos(-angle);
+      }
+      return {x:rx+pvx,y:ry+pvy,z:rz};
+    });
+  }
+
+  getBounceVerts() {
+    var t=this.anim.progress, dir=this.anim.dir;
+    var angle=Math.sin(t*Math.PI)*0.22;
+    var dim=this.getDim(this.orientation);
+    var pvx=this.x, pvy=this.y;
+    if(dir==='right')     pvx=this.x+dim.sx;
+    else if(dir==='down') pvy=this.y+dim.sy;
+    var self=this;
+    return this.getVerts(this.x,this.y,0,dim).map(function(v){
+      var lx=v.x-pvx,ly=v.y-pvy,lz=v.z,rx=lx,ry=ly,rz=lz;
+      if(dir==='right'||dir==='left'){
+        var a2=dir==='right'?angle:-angle;
+        rx=lx*Math.cos(a2)+lz*Math.sin(a2);
+        rz=-lx*Math.sin(a2)+lz*Math.cos(a2);
+      } else {
+        var a2=dir==='down'?angle:-angle;
+        ry=ly*Math.cos(a2)+lz*Math.sin(a2);
+        rz=-ly*Math.sin(a2)+lz*Math.cos(a2);
+      }
+      return {x:rx+pvx,y:ry+pvy,z:rz};
+    });
+  }
+
+  getStaticVerts() {
+    var dim=this.getDim(this.orientation);
+    return this.getVerts(this.x,this.y,0,dim);
+  }
+
+  getCurrentVerts() {
+    if(!this.anim||this.anim.progress>=1) return this.getStaticVerts();
+    if(this.anim.type==='roll')   return this.getRollVerts(this.anim.progress);
+    if(this.anim.type==='bounce') return this.getBounceVerts();
+    return this.getStaticVerts();
+  }
+}
+
+// =============================================
+// Game
+// =============================================
+class Game {
+  constructor(){
+    this.canvas=document.getElementById('game-canvas');
+    this.ctx=this.canvas.getContext('2d');
+    this.board=new Board();
+    this.cube=new Cube();
+    this.score=SaveManager.loadScore(); this.best=SaveManager.load();
+    this.mode='normal';
+    this.running=false; this.menuOpen=true;
+    this.animProgress=1;
+    this.ROLL_SPD=0.05; this.BOUNCE_SPD=0.07; this.FALL_SPD=0.028;
+    this.falling=false;
+    this._bindUI(); this._bindKeys(); this._loop();
+    VoiceManager.init();
+    this._updateHUD(); // 初期スコア表示を更新
+  }
+
+  start(){
+    // スコアはリセットせず、現在の値を維持
+    this._updateHUD();
+    this.cube.reset(); this._newRound();
+    this.running=true; this.menuOpen=false;
+    document.getElementById('menu').style.display='none';
+    this._updateBlindLog();
+  }
+
+  _newRound(){
+    this.board.placeHole(this.cube.getCells());
+    this._placeCubeRandom();
+    this.animProgress=1; this.falling=false; this.cube.anim=null;
+    // ブラインドモードで新しいラウンド開始時に位置を読み上げ
+    if(this.mode==='blind'){
+      var self=this;
+      setTimeout(function(){
+        VoiceManager.speakPosition(self.cube.getCells(), self.board.hole);
+      },300);
+    }
+  }
+
+  _placeCubeRandom(){
+    var oris=['standing','lying_x','lying_y'];
+    var placed=false, att=0;
+    while(!placed&&att++<300){
+      var ori=oris[Math.floor(Math.random()*oris.length)];
+      var x=Math.floor(Math.random()*BS), y=Math.floor(Math.random()*BS);
+      this.cube.x=x; this.cube.y=y; this.cube.orientation=ori;
+      var cells=this.cube.getCells();
+      var hole=this.board.hole;
+      if(cells.every(function(c){return c.x>=0&&c.x<BS&&c.y>=0&&c.y<BS;})&&
+         !cells.some(function(c){return c.x===hole.x&&c.y===hole.y;})) placed=true;
+    }
+    if(!placed){this.cube.x=0;this.cube.y=0;this.cube.orientation='standing';}
+  }
+
+  _bindKeys(){
+    var self=this;
+    document.addEventListener('keydown',function(e){
+      if(!self.running||self.animProgress<1||self.falling) return;
+      var map={ArrowRight:'right',ArrowLeft:'left',ArrowDown:'down',ArrowUp:'up'};
+      var dir=map[e.key];
+      if(dir){e.preventDefault();self._tryMove(dir);}
+      if(e.key==='Escape') self._toggleMenu();
+      if(e.key===' '){
+        e.preventDefault();
+        VoiceManager.speakPosition(self.cube.getCells(), self.board.hole);
+      }
+    });
+  }
+
+  _tryMove(dir){
+    var next=this.cube.calcMove(dir);
+    var nc=this.cube.getCellsFrom(next.x,next.y,next.orientation);
+    var hole=this.board.hole;
+    var isClear=next.orientation==='standing'&&hole&&next.x===hole.x&&next.y===hole.y;
+    var self=this;
+    var canStand=function(c){
+      return self.board.inBounds(c.x,c.y)&&
+             (isClear||!(hole&&hole.x===c.x&&hole.y===c.y));
+    };
+    if(!nc.some(canStand)){
+      this.cube.anim={type:'bounce',dir:dir,progress:0};
+      this.animProgress=0;
+      SoundManager.bounce();
+      return;
+    }
+    this.cube.anim={type:'roll',dir:dir,fromX:this.cube.x,fromY:this.cube.y,fromOri:this.cube.orientation};
+    this.cube.x=next.x; this.cube.y=next.y; this.cube.orientation=next.orientation;
+    this.animProgress=0;
+    SoundManager.roll();
+    this._updateBlindLog();
+  }
+
+  _checkClear(){
+    var h=this.board.hole;
+    return this.cube.orientation==='standing'&&h&&this.cube.x===h.x&&this.cube.y===h.y;
+  }
+
+  _loop(){
+    var self=this;
+    var step=function(){self._update();self._render();requestAnimationFrame(step);};
+    requestAnimationFrame(step);
+  }
+
+  _update(){
+    if(!this.running) return;
+    if(this.animProgress<1){
+      var spd=this.falling?this.FALL_SPD:
+              (this.cube.anim&&this.cube.anim.type==='bounce')?this.BOUNCE_SPD:this.ROLL_SPD;
+      this.animProgress=Math.min(1,this.animProgress+spd);
+      if(this.cube.anim) this.cube.anim.progress=this.animProgress;
+      if(this.animProgress>=1){
+        if(!this.falling&&this.cube.anim&&this.cube.anim.type==='roll'){
+          this.cube.anim=null;
+          if(this._checkClear()){this.falling=true;this.animProgress=0;SoundManager.score();}
+        } else if(this.falling){
+          this.falling=false;
+          this.score++;
+          SaveManager.saveScore(this.score);
+          if(this.score>this.best){ this.best=this.score; SaveManager.save(this.best); }
+          this._updateHUD();
+          var self=this;
+          setTimeout(function(){self._newRound();self._updateBlindLog();SoundManager.next();},80);
+        } else if(this.cube.anim&&this.cube.anim.type==='bounce'){
+          this.cube.anim=null;
+        }
+      }
+    }
+  }
+
+  _renderFall(ctx){
+    var t=this.animProgress;
+    var hx=this.cube.x, hy=this.cube.y;
+    var hDepth=hx+hy;
+    var fallZ=-easeIn(t)*4.5;
+    var alpha=t<0.5?1:1-(t-0.5)*2*0.85;
+    var dim=this.cube.getDim(this.cube.orientation);
+    var verts=this.cube.getVerts(hx,hy,fallZ,dim);
+
+    this.board.drawFiltered(ctx,function(x,y){return (x+y)<hDepth;});
+    this.board.drawFiltered(ctx,function(x,y){return (x+y)===hDepth&&x<hx;});
+    this.cube.drawBox(ctx,verts,alpha);
+    this.board.drawFiltered(ctx,function(x,y){return (x+y)===hDepth&&x>=hx&&!(x===hx&&y===hy);});
+    this.board.drawFiltered(ctx,function(x,y){return (x+y)>hDepth;});
+  }
+
+  _render(){
+    var ctx=this.ctx;
+    ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
+    if(this.mode==='blind') return;
+    if(this.falling){
+      this._renderFall(ctx);
+    } else {
+      this.board.drawFiltered(ctx,function(){return true;});
+      this.cube.drawBox(ctx,this.cube.getCurrentVerts());
+    }
+  }
+
+  _updateBlindLog(){
+    if(this.mode!=='blind') return;
+    var log=document.getElementById('bl-content');
+    var h=this.board.hole, bs=BS, cells=this.cube.getCells();
+    var num=function(x,y){return y*bs+x+1;};
+    var lbl=function(c){return (c.x>=0&&c.x<bs&&c.y>=0&&c.y<bs)?num(c.x,c.y):'Out';};
+    var st=this.cube.orientation==='standing'?' (standing)':
+           this.cube.orientation==='lying_x'?' (lying L/R)':' (lying U/D)';
+    log.innerHTML=
+      '<div style="text-align:center;padding:12px 0 8px">'+
+      '<div style="font-size:17px;color:#555;letter-spacing:0.06em;margin-bottom:6px">Block</div>'+
+      '<div style="font-size:26px;font-weight:700;letter-spacing:0.04em">'+cells.map(lbl).join(' &amp; ')+st+'</div>'+
+      '</div>'+
+      '<div style="border-top:1px solid #ddd;margin:16px 0"></div>'+
+      '<div style="text-align:center;padding:4px 0">'+
+      '<div style="font-size:17px;color:#555;letter-spacing:0.06em;margin-bottom:6px">Hole</div>'+
+      '<div style="font-size:26px;font-weight:700;letter-spacing:0.04em">'+(h?num(h.x,h.y):'—')+'</div>'+
+      '</div>';
+  }
+
+  _bindUI(){
+    var self=this;
+    document.getElementById('btn-start').addEventListener('click',function(){self.start();});
+    document.getElementById('btn-reset').addEventListener('click',function(){
+      self.score=0; self.best=0; SaveManager.saveScore(0); SaveManager.save(0); self._updateHUD();
+    });
+    document.getElementById('btn-mode').addEventListener('click',function(){
+      self.mode=self.mode==='normal'?'blind':'normal'; self._applyMode();
+    });
+  }
+
+  _toggleMenu(){
+    this.menuOpen=!this.menuOpen;
+    document.getElementById('menu').style.display=this.menuOpen?'flex':'none';
+    this.running=!this.menuOpen;
+    SoundManager.menu();
+    if(!this.menuOpen) this._updateBlindLog();
+  }
+
+  _applyMode(){
+    var bl=document.getElementById('blind-log');
+    var cv=document.getElementById('game-canvas');
+    var mb=document.getElementById('btn-mode');
+    if(this.mode==='blind'){
+      cv.style.display='none'; bl.style.display='block';
+      mb.textContent='MODE: BLIND';
+      document.getElementById('mode-val').textContent='BLIND';
+    } else {
+      cv.style.display='block'; bl.style.display='none';
+      mb.textContent='MODE: NORMAL';
+      document.getElementById('mode-val').textContent='NORMAL';
+    }
+  }
+
+  _updateHUD(){
+    document.getElementById('score-val').textContent=this.score;
+    document.getElementById('best-val').textContent=this.best;
+    var menuScore=document.getElementById('score-val-menu');
+    if(menuScore) menuScore.textContent=this.score;
+  }
+}
+
+// =============================================
+// SoundManager - Web Audio APIで効果音を生成
+// =============================================
+var SoundManager = {
+  ctx: null,
+  init: function(){
+    if(this.ctx) return;
+    this.ctx = new (window.AudioContext||window.webkitAudioContext)();
+  },
+  _gain: function(vol, t){
+    var g=this.ctx.createGain();
+    g.gain.setValueAtTime(vol, t);
+    return g;
+  },
+
+  // 転がり音：コロコロっとした短いノイズ+ピッチ
+  roll: function(){
+    this.init();
+    var ctx=this.ctx, now=ctx.currentTime;
+    // ウッディな打撃感：短いサイン波 x2
+    [220, 310].forEach(function(freq, i){
+      var osc=ctx.createOscillator();
+      var g=ctx.createGain();
+      osc.type='sine';
+      osc.frequency.setValueAtTime(freq, now+i*0.04);
+      osc.frequency.exponentialRampToValueAtTime(freq*0.6, now+i*0.04+0.12);
+      g.gain.setValueAtTime(0.18, now+i*0.04);
+      g.gain.exponentialRampToValueAtTime(0.001, now+i*0.04+0.13);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(now+i*0.04); osc.stop(now+i*0.04+0.15);
+    });
+  },
+
+  // スポッと入った音：軽快な下降チャイム
+  score: function(){
+    this.init();
+    var ctx=this.ctx, now=ctx.currentTime;
+    var freqs=[880, 1100, 1320, 1760];
+    freqs.forEach(function(freq, i){
+      var osc=ctx.createOscillator();
+      var g=ctx.createGain();
+      osc.type='triangle';
+      osc.frequency.setValueAtTime(freq, now+i*0.07);
+      g.gain.setValueAtTime(0.22, now+i*0.07);
+      g.gain.exponentialRampToValueAtTime(0.001, now+i*0.07+0.25);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(now+i*0.07); osc.stop(now+i*0.07+0.28);
+    });
+    // 落下感の低音
+    var sub=ctx.createOscillator();
+    var sg=ctx.createGain();
+    sub.type='sine';
+    sub.frequency.setValueAtTime(160, now);
+    sub.frequency.exponentialRampToValueAtTime(60, now+0.3);
+    sg.gain.setValueAtTime(0.25, now);
+    sg.gain.exponentialRampToValueAtTime(0.001, now+0.35);
+    sub.connect(sg); sg.connect(ctx.destination);
+    sub.start(now); sub.stop(now+0.38);
+  },
+
+  // 次ステージ音：ポップなアルペジオ
+  next: function(){
+    this.init();
+    var ctx=this.ctx, now=ctx.currentTime;
+    var freqs=[523, 659, 784, 1047]; // C5 E5 G5 C6
+    freqs.forEach(function(freq, i){
+      var osc=ctx.createOscillator();
+      var g=ctx.createGain();
+      osc.type='sine';
+      osc.frequency.setValueAtTime(freq, now+i*0.09);
+      g.gain.setValueAtTime(0.15, now+i*0.09);
+      g.gain.exponentialRampToValueAtTime(0.001, now+i*0.09+0.3);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(now+i*0.09); osc.stop(now+i*0.09+0.32);
+    });
+  },
+
+  // メニュー切り替え音：ふわっとしたトーン
+  menu: function(){
+    this.init();
+    var ctx=this.ctx, now=ctx.currentTime;
+    var osc=ctx.createOscillator();
+    var g=ctx.createGain();
+    osc.type='sine';
+    osc.frequency.setValueAtTime(440, now);
+    osc.frequency.linearRampToValueAtTime(560, now+0.12);
+    g.gain.setValueAtTime(0.12, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now+0.22);
+    osc.connect(g); g.connect(ctx.destination);
+    osc.start(now); osc.stop(now+0.25);
+  },
+
+  // バウンス音：コツっと
+  bounce: function(){
+    this.init();
+    var ctx=this.ctx, now=ctx.currentTime;
+    var osc=ctx.createOscillator();
+    var g=ctx.createGain();
+    osc.type='square';
+    osc.frequency.setValueAtTime(180, now);
+    osc.frequency.exponentialRampToValueAtTime(100, now+0.08);
+    g.gain.setValueAtTime(0.08, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now+0.09);
+    osc.connect(g); g.connect(ctx.destination);
+    osc.start(now); osc.stop(now+0.1);
+  }
+};
+
+// =============================================
+// VoiceManager - 音声合成で位置を読み上げ
+// =============================================
+var VoiceManager = {
+  synth: null,
+  voice: null,
+  init: function(){
+    if('speechSynthesis' in window){
+      this.synth = window.speechSynthesis;
+      // 日本語女性ボイスを探す
+      var voices = this.synth.getVoices();
+      var setVoice = function(){
+        voices = this.synth.getVoices();
+        // 日本語ボイスを優先（Google日本語やMicrosoft Ayumuなど）
+        this.voice = voices.find(function(v){
+          return v.lang.includes('ja') || v.lang.includes('ja-JP');
+        }) || voices[0] || null;
+      }.bind(this);
+
+      if(voices.length > 0){
+        setVoice();
+      } else {
+        this.synth.onvoiceschanged = setVoice;
+      }
+    }
+  },
+  speak: function(text){
+    if(!this.synth) return;
+    this.synth.cancel(); // 前の音声を停止
+    var ut = new SpeechSynthesisUtterance(text);
+    ut.voice = this.voice;
+    ut.lang = 'ja-JP';
+    ut.rate = 1.2;
+    ut.pitch = 1.3;
+    this.synth.speak(ut);
+  },
+  // 位置を数字で読み上げ（例: "ブロック3、穴7"）
+  speakPosition: function(cubeCells, hole){
+    if(!this.synth) return;
+    var pos = cubeCells.map(function(c){
+      return c.y * 3 + c.x + 1;
+    }).join('と');
+    var holeNum = hole ? (hole.y * 3 + hole.x + 1) : 'なし';
+    var msg = 'ブロック' + pos + '、穴' + holeNum;
+    this.speak(msg);
+  }
+};
+
+// =============================================
+// SaveManager - localStorageでスコア永続化
+// =============================================
+var SaveManager = {
+  KEY: 'cubeFitBest',
+  SCORE_KEY: 'cubeFitScore',
+  load: function(){
+    var v=localStorage.getItem(this.KEY);
+    return v ? parseInt(v,10) : 0;
+  },
+  save: function(val){
+    localStorage.setItem(this.KEY, String(val));
+  },
+  loadScore: function(){
+    var v=localStorage.getItem(this.SCORE_KEY);
+    return v ? parseInt(v,10) : 0;
+  },
+  saveScore: function(val){
+    localStorage.setItem(this.SCORE_KEY, String(val));
+  }
+};
+
+var game=new Game();
+</script>
+</body>
+</html>
